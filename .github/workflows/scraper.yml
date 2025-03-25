@@ -1,0 +1,31 @@
+name: Fetch Amount Daily
+
+on:
+  schedule:
+    - cron: "0 6 * * *"  # Exécute tous les jours à 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout du repo
+        uses: actions/checkout@v3
+
+      - name: Récupérer la page
+        run: curl -s "https://collecter.petitsprinces.com/fundraisers/geoffrey-feldner" -o page.html
+
+      - name: Extraire la valeur
+        run: grep -oP '(?<=<div class="amount-reached">).*?(?=</div>)' page.html > amount.txt
+
+      - name: Créer JSON API
+        run: echo "{\"number\": $(cat amount.txt), \"date\": \"$(date -u)\"}" > docs/amount.json
+
+      - name: Commit & push
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add docs/amount.json
+          git commit -m "Mise à jour du montant" || echo "Pas de changements"
+          git push
+        continue-on-error: true
