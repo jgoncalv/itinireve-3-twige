@@ -1,5 +1,8 @@
 name: Fetch Total Amount and Commit to Repo
 
+permissions:
+  contents: write
+
 on:
   schedule:
     - cron: '0 * * * *' # Exécute chaque heure
@@ -22,9 +25,12 @@ jobs:
           echo "{ \"number\": $TOTAL_AMOUNT }" > amount.json
 
       - name: Commit and push amount.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_SECRET }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
+          git pull --rebase
           git add amount.json
           git commit -m "Update amount.json with latest total_amount" || echo "No changes to commit"
-          git push
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main
