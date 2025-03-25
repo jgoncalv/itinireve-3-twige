@@ -1,40 +1,51 @@
-name: Fetch Amount Daily
+name: Fetch Amount and Save to JSON
 
 on:
   schedule:
-    - cron: "0 6 * * *"  # Exécute tous les jours à 06:00 UTC
-  workflow_dispatch:  # Permet d'exécuter manuellement
+    - cron: "0 6 * * *" # Exécuter tous les jours à 06:00 UTC
+  workflow_dispatch: # Permet d'exécuter manuellement
 
 jobs:
-  scrape:
+  fetch_and_store:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout du repo
+      - name: Checkout du repository
         uses: actions/checkout@v3
 
-      - name: Installer les outils nécessaires
+      - name: Installer jq (outil JSON)
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Récupérer la page
-        run: curl -s "https://collecter.petitsprinces.com/fundraisers/geoffrey-feldner" -o page.html
-
-      - name: Extraire la valeur
+      - name: Récupérer les données depuis l'API
         run: |
-          amount=$(grep -oP '<div class="amount-reached">.*?</div>' page.html | sed -E 's/<[^>]+>//g' | tr -d '€' | xargs)
-          echo "Valeur extraite: $amount"
-          echo "{ \"number\": \"$amount\", \"date\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\" }" > amount.json
+          # Effectuer la requête curl et récupérer la réponse
+          response=$(curl --location 'https://frontend-api.kentaa.nl/actions/cVPiLcz9Nh81' \
+            --header 'accept: application/json' \
+            --header 'accept-language: en-GB,en-US;q=0.9,en;q=0.8,fr;q=0.7' \
+            --header 'content-type: application/json' \
+            --header 'if-none-match: W/"71205c55c19cb2b9d17377ed58dda514"' \
+            --header 'origin: https://collecter.petitsprinces.com' \
+            --header 'priority: u=1, i' \
+            --header 'x-locale: en' \
+            --header 'x-site-id: aoEcWgKEz2NS')
 
-      - name: Déplacer le fichier dans docs/
+          # Extraire la valeur de data.amount dans la réponse JSON
+          amount=$(echo "$response" | jq '.data.amount')
+
+          # Créer le fichier JSON avec la valeur extraite et la date actuelle
+          echo "{ \"number\": $amount, \"date\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\" }" > amount.json
+
+      - name: Déplacer le fichier dans le dossier docs/
         run: |
           mkdir -p docs
           mv amount.json docs/
 
-      - name: Commit & push des données
+      - name: Commit et push du fichier amount.json
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add docs/amount.json
-          git commit -m "Mise à jour du montant" || echo "Aucune modification à commit"
+          git commit -m "Mise à jour de amount.json avec le dernier montant" || echo "Aucune modification détectée"
           git push https://github.com/${{ github.repository }}.git HEAD:main
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
