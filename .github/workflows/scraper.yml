@@ -1,4 +1,4 @@
-name: Fetch Total Amount
+name: Fetch Total Amount and Deploy to GitHub Pages
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch: # Permet de déclencher manuellement
 
 jobs:
-  fetch-data:
+  fetch-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -19,11 +19,11 @@ jobs:
             --header 'x-locale: en' \
             --header 'x-site-id: aoEcWgKEz2NS')
           TOTAL_AMOUNT=$(echo $RESPONSE | jq -r '.data.total_amount | tonumber')
-          echo "{ \"number\": $TOTAL_AMOUNT }" > amount.json
+          mkdir -p public
+          echo "{ \"number\": $TOTAL_AMOUNT }" > public/amount.json
 
-      - name: Upload amount.json as artifact
-        uses: actions/upload-artifact@v4
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          name: amount-data
-          path: amount.json
-          retention-days: 30
+          github_token: ${{ secrets.GH_TOKEN }}
+          publish_dir: ./public
