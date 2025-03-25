@@ -3,7 +3,7 @@ name: Fetch Amount Daily
 on:
   schedule:
     - cron: "0 6 * * *"  # Exécute tous les jours à 06:00 UTC
-  workflow_dispatch:
+  workflow_dispatch:  # Permet d'exécuter manuellement
 
 jobs:
   scrape:
@@ -12,20 +12,28 @@ jobs:
       - name: Checkout du repo
         uses: actions/checkout@v3
 
+      - name: Installer les outils nécessaires
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Récupérer la page
         run: curl -s "https://collecter.petitsprinces.com/fundraisers/geoffrey-feldner" -o page.html
 
       - name: Extraire la valeur
-        run: grep -oP '(?<=<div class="amount-reached">).*?(?=</div>)' page.html > amount.txt
+        run: |
+          amount=$(grep -oP '<div class="amount-reached">.*?</div>' page.html | sed -E 's/<[^>]+>//g' | tr -d '€' | xargs)
+          echo "Valeur extraite: $amount"
+          echo "{ \"number\": \"$amount\", \"date\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\" }" > amount.json
 
-      - name: Créer JSON API
-        run: echo "{\"number\": $(cat amount.txt), \"date\": \"$(date -u)\"}" > docs/amount.json
+      - name: Déplacer le fichier dans docs/
+        run: |
+          mkdir -p docs
+          mv amount.json docs/
 
-      - name: Commit & push
+      - name: Commit & push des données
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add docs/amount.json
-          git commit -m "Mise à jour du montant" || echo "Pas de changements"
+          git commit -m "Mise à jour du montant" || echo "Aucune modification à commit"
           git push
         continue-on-error: true
