@@ -1,4 +1,4 @@
-name: Fetch Total Amount and Deploy to GitHub Pages
+name: Fetch Total Amount and Commit to Repo
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch: # Permet de déclencher manuellement
 
 jobs:
-  fetch-and-deploy:
+  fetch-and-commit:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -19,11 +19,12 @@ jobs:
             --header 'x-locale: en' \
             --header 'x-site-id: aoEcWgKEz2NS')
           TOTAL_AMOUNT=$(echo $RESPONSE | jq -r '.data.total_amount | tonumber')
-          mkdir -p public
-          echo "{ \"number\": $TOTAL_AMOUNT }" > public/amount.json
+          echo "{ \"number\": $TOTAL_AMOUNT }" > amount.json
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GH_SECRET }}
-          publish_dir: ./public
+      - name: Commit and push amount.json
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add amount.json
+          git commit -m "Update amount.json with latest total_amount" || echo "No changes to commit"
+          git push
