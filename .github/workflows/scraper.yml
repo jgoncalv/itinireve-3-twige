@@ -5,8 +5,8 @@ permissions:
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # Exécute chaque 5 min
-  workflow_dispatch: # Permet de déclencher manuellement
+    - cron: "*/5 * * * *" # Exécute toutes les 5 minutes
+  workflow_dispatch: # Permet un déclenchement manuel
 
 jobs:
   fetch-and-commit:
@@ -14,23 +14,34 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Nécessaire pour permettre des réinitialisations précises
 
       - name: Fetch data from API
         run: |
+          # Exécute une requête API et extrait le montant total
           RESPONSE=$(curl --silent --location 'https://frontend-api.kentaa.nl/actions/cVPiLcz9Nh81' \
             --header 'accept: application/json' \
             --header 'x-locale: en' \
             --header 'x-site-id: aoEcWgKEz2NS')
+          
+          # Convertit les données reçues en JSON compatible
           TOTAL_AMOUNT=$(echo $RESPONSE | jq -r '.data.total_amount | tonumber')
           echo "{ \"number\": $TOTAL_AMOUNT }" > amount.json
+
+      - name: Reset repository to latest state
+        run: |
+          # S'assure que le repository est propre avant toute modification
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git fetch
+          git reset --hard origin/main
 
       - name: Commit and push amount.json
         env:
           GITHUB_TOKEN: ${{ secrets.GH_SECRET }}
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git pull --rebase
+          # Ajoute, valide et pousse les modifications seulement si nécessaires
           git add amount.json
-          git commit -m "Update amount.json with latest total_amount" || echo "No changes to commit"
+          git diff --cached --quiet || git commit -m "Update amount.json with latest total_amount"
           git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main
