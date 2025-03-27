@@ -5,8 +5,8 @@ permissions:
 
 on:
   schedule:
-    - cron: "*/5 * * * *" # Exécute toutes les 5 minutes
-  workflow_dispatch: # Permet un déclenchement manuel
+    - cron: "*/5 * * * *"  # Run every 5 minutes
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
   fetch-and-commit:
@@ -15,33 +15,47 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Nécessaire pour permettre des réinitialisations précises
+          fetch-depth: 0
 
-      - name: Fetch data from API
+      - name: Fetch and Process Total Amount
+        id: fetch-amount
+        env:
+          API_URL: 'https://frontend-api.kentaa.nl/actions/cVPiLcz9Nh81'
         run: |
-          # Exécute une requête API et extrait le montant total
-          RESPONSE=$(curl --silent --location 'https://frontend-api.kentaa.nl/actions/cVPiLcz9Nh81' \
+          # Fetch data with error handling
+          response=$(curl -f --silent --location "$API_URL" \
             --header 'accept: application/json' \
             --header 'x-locale: en' \
             --header 'x-site-id: aoEcWgKEz2NS')
           
-          # Convertit les données reçues en JSON compatible
-          TOTAL_AMOUNT=$(echo $RESPONSE | jq -r '.data.total_amount | tonumber')
-          echo "{ \"number\": $TOTAL_AMOUNT }" > amount.json
+          # Validate and extract amount
+          total_amount=$(echo "$response" | jq -e '.data.total_amount | tonumber')
+          
+          if [ $? -ne 0 ]; then
+            echo "Error: Unable to extract total amount from API response"
+            exit 1
+          fi
+          
+          # Create amount.json with extracted value
+          echo "{ \"number\": $total_amount }" > amount.json
+          
+          # Set output for potential debugging
+          echo "total_amount=$total_amount" >> "$GITHUB_OUTPUT"
 
-      - name: Reset repository to latest state
+      - name: Prepare Git Configuration
         run: |
-          # S'assure que le repository est propre avant toute modification
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git fetch
-          git reset --hard origin/main
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "<>"
 
-      - name: Commit and push amount.json
+      - name: Commit and Push Changes
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Ajoute, valide et pousse les modifications seulement si nécessaires
-          git add amount.json
-          git diff --cached --quiet || git commit -m "Update amount.json with latest total_amount"
-          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git main
+          # Check if there are changes
+          if ! git diff --quiet --exit-code -- amount.json; then
+            git add amount.json
+            git commit -m "Update amount.json: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          else
+            echo "No changes to commit"
+          fi
